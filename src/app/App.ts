@@ -3,7 +3,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
 import { injectable } from "inversify";
 import { AppError } from "./errors/AppError";
-import { usersRouter } from "../modules/users";
+import { usersRouter } from "../presentation/routes/user.routes";
 
 export interface IApp {
   getApp(): OpenAPIHono;

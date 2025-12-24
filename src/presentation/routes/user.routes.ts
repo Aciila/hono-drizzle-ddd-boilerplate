@@ -1,5 +1,10 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { getUsersService } from "./users.service";
+import { container } from "../../config/inversify.config";
+import type { CreateUserUseCase } from "../../application/usecases/CreateUserUseCase";
+import type { GetUserByIdUseCase } from "../../application/usecases/GetUserByIdUseCase";
+import type { ListUsersUseCase } from "../../application/usecases/ListUsersUseCase";
+import type { UpdateUserUseCase } from "../../application/usecases/UpdateUserUseCase";
+import type { DeleteUserUseCase } from "../../application/usecases/DeleteUserUseCase";
 import {
   CreateUserRequestSchema,
   UpdateUserRequestSchema,
@@ -7,14 +12,21 @@ import {
   ListUsersQuerySchema,
   UserResponseSchema,
   UsersListResponseSchema,
-} from "./users.schema";
+} from "../schemas/user.schema";
 
 // =============================================================================
-// Routes Definition
+// Users Router
 // =============================================================================
 
 const usersRouter = new OpenAPIHono();
-const usersService = getUsersService();
+
+// Resolve use cases from DI container
+const createUserUseCase = container.get<CreateUserUseCase>("CreateUserUseCase");
+const getUserByIdUseCase =
+  container.get<GetUserByIdUseCase>("GetUserByIdUseCase");
+const listUsersUseCase = container.get<ListUsersUseCase>("ListUsersUseCase");
+const updateUserUseCase = container.get<UpdateUserUseCase>("UpdateUserUseCase");
+const deleteUserUseCase = container.get<DeleteUserUseCase>("DeleteUserUseCase");
 
 // GET /users - List all users
 const listUsersRoute = createRoute({
@@ -39,7 +51,7 @@ const listUsersRoute = createRoute({
 
 usersRouter.openapi(listUsersRoute, async (c) => {
   const { limit, offset } = c.req.valid("query");
-  const result = await usersService.getUsers(limit, offset);
+  const result = await listUsersUseCase.execute({ limit, offset });
 
   return c.json(result, 200);
 });
@@ -78,7 +90,7 @@ const getUserByIdRoute = createRoute({
 
 usersRouter.openapi(getUserByIdRoute, async (c) => {
   const { id } = c.req.valid("param");
-  const user = await usersService.getUserById(id);
+  const { user } = await getUserByIdUseCase.execute({ id });
 
   return c.json(user, 200);
 });
@@ -123,7 +135,7 @@ const createUserRoute = createRoute({
 
 usersRouter.openapi(createUserRoute, async (c) => {
   const body = c.req.valid("json");
-  const user = await usersService.createUser(body);
+  const { user } = await createUserUseCase.execute(body);
 
   return c.json(user, 201);
 });
@@ -170,7 +182,7 @@ const updateUserRoute = createRoute({
 usersRouter.openapi(updateUserRoute, async (c) => {
   const { id } = c.req.valid("param");
   const body = c.req.valid("json");
-  const user = await usersService.updateUser(id, body);
+  const { user } = await updateUserUseCase.execute({ id, ...body });
 
   return c.json(user, 200);
 });
@@ -204,7 +216,7 @@ const deleteUserRoute = createRoute({
 
 usersRouter.openapi(deleteUserRoute, async (c) => {
   const { id } = c.req.valid("param");
-  await usersService.deleteUser(id);
+  await deleteUserUseCase.execute({ id });
 
   return c.body(null, 204);
 });

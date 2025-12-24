@@ -17,28 +17,49 @@ Clean Architecture API boilerplate with Domain-Driven Design (DDD) patterns, usi
 
 ```
 src/
-├── app/                    # Application layer
-│   ├── App.ts             # Main application setup
-│   └── errors/            # Custom error classes
-├── config/                # Configuration
-│   └── inversify.config.ts # DI container
-├── database/              # Database layer
-│   ├── index.ts           # DB connection
-│   ├── schema.ts          # Drizzle schema
-│   └── migrations/        # SQL migrations
-├── domain/                # Domain layer (business logic)
-│   ├── entities/          # Domain entities
-│   ├── repositories/      # Repository interfaces
-│   └── useCases/          # Business use cases
-├── infrastructure/        # Infrastructure layer
-│   └── repositories/      # Repository implementations
-├── presentation/          # Presentation layer
-│   ├── controllers/       # HTTP controllers
-│   └── routes/            # Route definitions
-├── common/                # Shared types and utilities
-│   └── types/
-├── main.ts                # App entry point
-└── server.ts              # Server configuration
+├── domain/                     # Domain Layer (Business Logic)
+│   ├── entities/               # Domain entities with business rules
+│   │   ├── BaseEntity.ts
+│   │   └── User.ts
+│   └── repositories/           # Repository interfaces (contracts)
+│       ├── IBaseRepository.ts
+│       └── IUserRepository.ts
+│
+├── application/                # Application Layer (Use Cases)
+│   ├── services/               # Application services
+│   │   └── UserService.ts
+│   └── usecases/               # Single-responsibility use cases
+│       ├── CreateUserUseCase.ts
+│       └── GetUserByIdUseCase.ts
+│
+├── infrastructure/             # Infrastructure Layer (Implementations)
+│   └── repositories/           # Repository implementations
+│       ├── BaseRepository.ts
+│       └── UserRepository.ts
+│
+├── presentation/               # Presentation Layer (HTTP)
+│   ├── routes/                 # API route definitions
+│   │   └── user.routes.ts
+│   └── schemas/                # Request/Response validation schemas
+│       └── user.schema.ts
+│
+├── database/                   # Database Configuration
+│   ├── index.ts                # DB connection
+│   ├── schema.ts               # Schema re-exports
+│   └── schemas/                # Individual table schemas
+│       ├── common.ts
+│       ├── users.schema.ts
+│       ├── posts.schema.ts
+│       └── tags.schema.ts
+│
+├── config/                     # Configuration
+│   └── inversify.config.ts     # DI container bindings
+│
+├── app/                        # App Setup
+│   ├── App.ts                  # Hono app configuration
+│   └── errors/                 # Custom error classes
+│
+└── server.ts                   # Entry point
 ```
 
 ## Getting Started
@@ -103,138 +124,233 @@ Once the server is running, access:
 
 ## Adding New Features
 
-### 1. Create Domain Entity
+Follow this order when adding a new feature:
+
+### 1. Database Schema
 
 ```typescript
-// src/domain/entities/User.ts
+// src/database/schemas/products.schema.ts
+import { index, pgTable, text, integer } from "drizzle-orm/pg-core";
+import { commonColumns } from "./common";
+
+export const products = pgTable(
+  "products",
+  {
+    ...commonColumns,
+    name: text().notNull(),
+    price: integer().notNull(),
+  },
+  (table) => [index("products_name_idx").on(table.name)]
+);
+
+export type ProductsInsert = typeof products.$inferInsert;
+export type ProductsSelect = typeof products.$inferSelect;
+```
+
+Then re-export in `src/database/schema.ts`.
+
+### 2. Domain Entity
+
+```typescript
+// src/domain/entities/Product.ts
 import { BaseEntity } from "./BaseEntity";
 
-export class User extends BaseEntity {
-  private _name: string;
+export interface IProductProps {
+  id: string;
+  name: string;
+  price: number;
+}
 
-  constructor(props: { id: string; name: string }) {
+export class Product extends BaseEntity {
+  private _name: string;
+  private _price: number;
+
+  constructor(props: IProductProps) {
     super();
     this.id = props.id;
     this._name = props.name;
+    this._price = props.price;
   }
 
   get name(): string {
     return this._name;
   }
+  get price(): number {
+    return this._price;
+  }
 
-  static create(name: string): User {
-    return new User({
+  static create(name: string, price: number): Product {
+    return new Product({
       id: BaseEntity.generateId(),
       name,
+      price,
     });
   }
 }
 ```
 
-### 2. Create Repository Interface
+### 3. Repository Interface
 
 ```typescript
-// src/domain/repositories/IUserRepository.ts
-import { IBaseRepository } from "./IBaseRepository";
-import { User } from "../entities/User";
+// src/domain/repositories/IProductRepository.ts
+import type { Product } from "../entities/Product";
+import type { IBaseRepository } from "./IBaseRepository";
 
-export interface IUserRepository extends IBaseRepository<User> {
-  findByName(name: string): Promise<User | null>;
+export interface IProductRepository extends IBaseRepository<Product> {
+  findByName(name: string): Promise<Product | null>;
 }
 ```
 
-### 3. Implement Repository
+### 4. Repository Implementation
 
 ```typescript
-// src/infrastructure/repositories/UserRepository.ts
+// src/infrastructure/repositories/ProductRepository.ts
 import { injectable } from "inversify";
 import { eq } from "drizzle-orm";
 import { BaseRepository } from "./BaseRepository";
-import { IUserRepository } from "../../domain/repositories/IUserRepository";
-import { User } from "../../domain/entities/User";
-import { users } from "../../database/schema";
+import type { IProductRepository } from "../../domain/repositories/IProductRepository";
+import { Product } from "../../domain/entities/Product";
+import { products } from "../../database/schema";
 
 @injectable()
-export class UserRepository extends BaseRepository implements IUserRepository {
-  async findById(id: string): Promise<User | null> {
-    const result = await this.db
+export class ProductRepository
+  extends BaseRepository
+  implements IProductRepository
+{
+  async findById(id: string): Promise<Product | null> {
+    const [result] = await this.db
       .select()
-      .from(users)
-      .where(eq(users.id, id))
+      .from(products)
+      .where(eq(products.id, id))
       .limit(1);
-    return result[0] ? this.toDomain(result[0]) : null;
+    return result ? this.toDomain(result) : null;
   }
 
-  async save(entity: User): Promise<void> {
-    await this.db.insert(users).values({ id: entity.id, name: entity.name });
+  async save(entity: Product): Promise<void> {
+    await this.db.insert(products).values({
+      id: entity.id,
+      name: entity.name,
+      price: entity.price,
+    });
   }
 
-  async findByName(name: string): Promise<User | null> {
-    const result = await this.db
+  async findByName(name: string): Promise<Product | null> {
+    const [result] = await this.db
       .select()
-      .from(users)
-      .where(eq(users.name, name))
+      .from(products)
+      .where(eq(products.name, name))
       .limit(1);
-    return result[0] ? this.toDomain(result[0]) : null;
+    return result ? this.toDomain(result) : null;
   }
 
-  private toDomain(data: any): User {
-    return new User({ id: data.id, name: data.name });
+  private toDomain(data: typeof products.$inferSelect): Product {
+    return new Product({ id: data.id, name: data.name, price: data.price });
   }
 }
 ```
 
-### 4. Create Use Case
+### 5. Use Case
 
 ```typescript
-// src/domain/useCases/user/CreateUserUseCase.ts
+// src/application/usecases/CreateProductUseCase.ts
 import { injectable, inject } from "inversify";
-import { IUseCase } from "../../../common/types";
-import { IUserRepository } from "../../repositories/IUserRepository";
-import { User } from "../../entities/User";
+import type { IProductRepository } from "../../domain/repositories/IProductRepository";
+import { Product } from "../../domain/entities/Product";
 
-interface Input {
+export interface CreateProductInput {
   name: string;
-}
-
-interface Output {
-  success: boolean;
-  data?: User;
-  error?: string;
+  price: number;
 }
 
 @injectable()
-export class CreateUserUseCase implements IUseCase<Input, Output> {
+export class CreateProductUseCase {
   constructor(
-    @inject("UserRepository") private userRepository: IUserRepository
+    @inject("ProductRepository") private productRepository: IProductRepository
   ) {}
 
-  async execute(input: Input): Promise<Output> {
-    try {
-      const user = User.create(input.name);
-      await this.userRepository.save(user);
-      return { success: true, data: user };
-    } catch (error) {
-      return { success: false, error: (error as Error).message };
-    }
+  async execute(input: CreateProductInput): Promise<Product> {
+    const product = Product.create(input.name, input.price);
+    await this.productRepository.save(product);
+    return product;
   }
 }
 ```
 
-### 5. Register in DI Container
+### 6. Register in DI Container
 
 ```typescript
 // src/config/inversify.config.ts
+import type { IProductRepository } from "../domain/repositories/IProductRepository";
+import { ProductRepository } from "../infrastructure/repositories/ProductRepository";
+import { CreateProductUseCase } from "../application/usecases/CreateProductUseCase";
+
 container
-  .bind<IUserRepository>("UserRepository")
-  .to(UserRepository)
+  .bind<IProductRepository>("ProductRepository")
+  .to(ProductRepository)
   .inSingletonScope();
-container.bind<CreateUserUseCase>("CreateUserUseCase").to(CreateUserUseCase);
+container
+  .bind<CreateProductUseCase>("CreateProductUseCase")
+  .to(CreateProductUseCase);
 ```
 
-### 6. Create Controller & Routes
+### 7. Presentation Schema
 
-Create your controller and routes following the same pattern.
+```typescript
+// src/presentation/schemas/product.schema.ts
+import { z } from "zod";
+
+export const CreateProductRequestSchema = z.object({
+  name: z.string().min(1),
+  price: z.number().positive(),
+});
+
+export const ProductResponseSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  price: z.number(),
+});
+```
+
+### 8. Routes
+
+```typescript
+// src/presentation/routes/product.routes.ts
+import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
+import { container } from "../../config/inversify.config";
+import { CreateProductUseCase } from "../../application/usecases/CreateProductUseCase";
+import {
+  CreateProductRequestSchema,
+  ProductResponseSchema,
+} from "../schemas/product.schema";
+
+const productsRouter = new OpenAPIHono();
+
+const createProductRoute = createRoute({
+  method: "post",
+  path: "/",
+  tags: ["Products"],
+  request: {
+    body: {
+      content: { "application/json": { schema: CreateProductRequestSchema } },
+    },
+  },
+  responses: {
+    201: {
+      content: { "application/json": { schema: ProductResponseSchema } },
+      description: "Created",
+    },
+  },
+});
+
+productsRouter.openapi(createProductRoute, async (c) => {
+  const body = c.req.valid("json");
+  const useCase = container.get<CreateProductUseCase>("CreateProductUseCase");
+  const product = await useCase.execute(body);
+  return c.json(product, 201);
+});
+
+export { productsRouter };
+```
 
 ## Scripts
 
