@@ -3,6 +3,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
 import { injectable } from "inversify";
 import { AppError } from "./errors/AppError";
+import { usersRouter } from "../modules/users";
 
 export interface IApp {
   getApp(): OpenAPIHono;
@@ -33,6 +34,9 @@ export class App implements IApp {
     this.app.get("/health", (c) => {
       return c.json({ status: "healthy", timestamp: new Date().toISOString() });
     });
+
+    // Mount module routes
+    this.app.route("/users", usersRouter);
   }
 
   private configureErrorHandling(): void {

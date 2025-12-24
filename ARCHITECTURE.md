@@ -4,6 +4,25 @@
 
 This boilerplate follows **Clean Architecture** principles with **Domain-Driven Design (DDD)** patterns, leveraging **InversifyJS** for dependency injection and **Drizzle ORM** for database operations.
 
+## Project Structure
+
+```
+src/
+├── app/                 # Application setup and error handling
+├── common/              # Shared utilities and helpers
+├── config/              # Dependency injection and configuration
+├── constants/           # Application-wide constants
+├── core/                # Core enums and types
+├── database/            # Database connection and schema
+├── domain/              # Business entities and repository interfaces
+├── infrastructure/      # Concrete implementations
+├── modules/             # Feature modules (business logic units)
+├── presentation/        # Controllers and routes
+├── services/            # External service integrations
+├── main.ts              # Application entry point
+└── server.ts            # Server configuration
+```
+
 ## Layers
 
 ### 1. Domain Layer (`src/domain/`)
@@ -86,7 +105,48 @@ HTTP interface for the application.
 - Generated from schema changes
 - Applied sequentially
 
-### 6. Configuration (`src/config/`)
+### 6. Modules (`src/modules/`)
+
+Feature-based modules that encapsulate related business logic. Each module contains:
+
+```
+modules/
+└── users/                  # Example module
+    ├── users.schema.ts     # Zod validation schemas (request/response)
+    ├── users.repository.ts # Data access layer
+    ├── users.service.ts    # Business logic
+    ├── users.routes.ts     # HTTP routes with OpenAPI
+    └── index.ts            # Public exports
+```
+
+**Best Practices:**
+
+- One module per business domain
+- Keep modules self-contained
+- Export only what's needed via `index.ts`
+- Use singleton pattern for services/repositories
+
+### 7. Services (`src/services/`)
+
+External integrations and third-party API clients.
+
+```
+services/
+├── email/           # Email service (SendGrid, etc.)
+├── storage/         # File storage (S3, etc.)
+├── queue/           # Job queues (BullMQ, etc.)
+└── index.ts
+```
+
+### 8. Constants (`src/constants/`)
+
+Application-wide constants and configuration values.
+
+### 9. Core (`src/core/`)
+
+Core enums, types, and shared definitions used across the application.
+
+### 10. Configuration (`src/config/`)
 
 **Dependency Injection** - InversifyJS container
 
