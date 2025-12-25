@@ -10,17 +10,17 @@ This boilerplate follows **Clean Architecture** principles with **Domain-Driven 
 src/
 ├── app/                 # Application setup and error handling
 ├── common/              # Shared utilities and helpers
-├── config/              # Dependency injection and configuration
+├── config/              # Dependency injection and transport configuration
 ├── constants/           # Application-wide constants
-├── core/                # Core enums and types
+├── core/                # Core enums, types, and transport interfaces
 ├── database/            # Database connection and schema
 ├── domain/              # Business entities and repository interfaces
-├── infrastructure/      # Concrete implementations
+├── infrastructure/      # Concrete implementations (repositories, transports)
 ├── modules/             # Feature modules (business logic units)
-├── presentation/        # Controllers and routes
+├── presentation/        # Controllers, routes, and presentation registry
 ├── services/            # External service integrations
 ├── main.ts              # Application entry point
-└── server.ts            # Server configuration
+└── server.ts            # Server startup and transport initialization
 ```
 
 ## Layers
@@ -78,7 +78,14 @@ Implements interfaces defined in the domain layer.
 
 ### 4. Presentation Layer (`src/presentation/`)
 
-HTTP interface for the application.
+Interface layer for the application, decoupled from the application core.
+
+**PresentationRegistry** - Central registration for all presentation endpoints
+
+- Registers HTTP routes to the app
+- Prepared for WebSocket handlers
+- Prepared for gRPC services
+- Clean separation from application layer
 
 **Controllers** - Handle HTTP requests
 
@@ -153,6 +160,47 @@ Core enums, types, and shared definitions used across the application.
 - Register all dependencies
 - Singleton vs transient scoping
 - Interface-based dependencies
+
+**Transport Configuration** - Multi-protocol support
+
+- Configuration-driven transport setup
+- Support for HTTP, WebSocket, and gRPC
+- Environment-based enablement
+- Port configuration per transport
+
+### 11. Transport Layer (`src/core/transports/` & `src/infrastructure/transports/`)
+
+**Separation of Server and Presentation**
+
+The architecture now cleanly separates server infrastructure from presentation logic:
+
+**Core Transport Interface** (`src/core/transports/`)
+
+- `ITransport` - Abstract transport interface
+- `TransportType` - Enum for transport types (HTTP, WebSocket, gRPC)
+
+**Infrastructure Transports** (`src/infrastructure/transports/`)
+
+- `HttpTransport` - HTTP server implementation (Bun)
+- `WebSocketTransport` - WebSocket server implementation
+- `GrpcTransport` - gRPC server implementation (placeholder)
+- `TransportFactory` - Factory for creating transports from config
+- `TransportManager` - Manages lifecycle of all transports
+
+**Transport Configuration** (`src/config/transports.config.ts`)
+
+- Declarative transport setup
+- Enable/disable transports via environment variables
+- Port configuration per transport
+- Custom transport options
+
+**Benefits:**
+
+- **Decoupled**: Server layer doesn't depend on presentation details
+- **Extensible**: Easy to add new transport protocols
+- **Configurable**: Enable/disable transports without code changes
+- **Testable**: Each transport can be tested independently
+- **Multi-protocol**: Run HTTP, WebSocket, and gRPC simultaneously
 
 ## Key Principles
 

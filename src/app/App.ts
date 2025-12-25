@@ -3,10 +3,11 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
 import { injectable } from "inversify";
 import { AppError } from "./errors/AppError";
-import { usersRouter } from "../presentation/routes/user.routes";
+import type { IPresentationRegistry } from "../presentation/PresentationRegistry";
 
 export interface IApp {
   getApp(): OpenAPIHono;
+  registerPresentationLayer(registry: IPresentationRegistry): void;
 }
 
 @injectable()
@@ -17,7 +18,6 @@ export class App implements IApp {
     this.app = new OpenAPIHono();
 
     this.configureMiddleware();
-    this.configureRoutes();
     this.configureErrorHandling();
     this.configureSwagger();
   }
@@ -26,17 +26,8 @@ export class App implements IApp {
     this.app.use(cors());
   }
 
-  private configureRoutes(): void {
-    this.app.get("/", (c) => {
-      return c.json({ message: "API Boilerplate" });
-    });
-
-    this.app.get("/health", (c) => {
-      return c.json({ status: "healthy", timestamp: new Date().toISOString() });
-    });
-
-    // Mount module routes
-    this.app.route("/users", usersRouter);
+  public registerPresentationLayer(registry: IPresentationRegistry): void {
+    registry.registerHttpRoutes(this.app);
   }
 
   private configureErrorHandling(): void {
